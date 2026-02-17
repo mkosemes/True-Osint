@@ -1,8 +1,12 @@
 import dns.resolver
+from dns.exception import DNSException
 
-def domain_has_mx(domain):
+
+def domain_has_mx(domain: str) -> bool:
+    if not domain:
+        return False
     try:
-        dns.resolver.resolve(domain, "MX")
+        dns.resolver.resolve(domain, "MX", lifetime=5.0)
         return True
-    except:
+    except DNSException:
         return False

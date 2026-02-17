@@ -9,13 +9,21 @@ SOCIAL_SITES = {
     "Medium": "https://medium.com/@{}"
 }
 
-def find_social_accounts(username):
+DEFAULT_TIMEOUT = 5
+
+
+def find_social_accounts(username: str) -> dict:
+    if not username:
+        return {}
+
+    username = username.strip()
     results = {}
-    for site, url in SOCIAL_SITES.items():
+    for site, url_template in SOCIAL_SITES.items():
+        url = url_template.format(username)
         try:
-            r = requests.get(url.format(username), timeout=5)
+            r = requests.get(url, timeout=DEFAULT_TIMEOUT)
             if r.status_code == 200:
-                results[site] = url.format(username)
-        except:
-            pass
+                results[site] = url
+        except requests.RequestException:
+            continue
     return results

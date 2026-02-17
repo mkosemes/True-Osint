@@ -5,10 +5,21 @@ DEVS = {
     "Bitbucket": "https://bitbucket.org/{}",
 }
 
-def find_dev_accounts(username):
+DEFAULT_TIMEOUT = 5
+
+
+def find_dev_accounts(username: str) -> dict:
+    if not username:
+        return {}
+
+    username = username.strip()
     results = {}
-    for p, url in DEVS.items():
-        r = requests.get(url.format(username))
-        if r.status_code == 200:
-            results[p] = url.format(username)
+    for platform, url_template in DEVS.items():
+        url = url_template.format(username)
+        try:
+            r = requests.get(url, timeout=DEFAULT_TIMEOUT)
+            if r.status_code == 200:
+                results[platform] = url
+        except requests.RequestException:
+            continue
     return results

@@ -8,6 +8,18 @@ Install dependencies:
 
 pip install -r requirements.txt
 
-Run the tool:
+Run the CLI tool:
 
 python main.py email@example.com
+
+You can also launch interactive mode (email prompt):
+
+python main.py
+
+Run the web interface:
+
+python main.py --web
+
+Then open:
+
+http://localhost:8000

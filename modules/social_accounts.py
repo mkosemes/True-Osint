@@ -5,6 +5,15 @@ import requests
 from core.email_utils import extract_username
 from core.gravatar import gravatar_profile_lookup
 
+try:
+    import httpx
+    import trio
+    from holehe.core import get_functions, import_submodules, launch_module
+
+    HOLEHE_AVAILABLE = True
+except Exception:
+    HOLEHE_AVAILABLE = False
+
 EMAIL_SCAN_SITES = {
     "GitHub": "https://github.com/{}",
     "Reddit": "https://www.reddit.com/user/{}",
@@ -38,6 +47,39 @@ GITHUB_API = "https://api.github.com"
 REQUEST_TIMEOUT = 10
 MAX_USERNAME_CANDIDATES = 5
 CONFIDENCE_SCORE = {"high": 3, "medium": 2, "low": 1}
+HOLEHE_TIMEOUT = 8
+HOLEHE_ALLOWED_DOMAINS = {
+    "github.com",
+    "google.com",
+    "discord.com",
+    "instagram.com",
+    "office365.com",
+    "pinterest.com",
+    "quora.com",
+    "snapchat.com",
+    "spotify.com",
+    "tumblr.com",
+    "twitter.com",
+    "yahoo.com",
+}
+HOLEHE_DOMAIN_LABELS = {
+    "github.com": "GitHub",
+    "google.com": "Google",
+    "discord.com": "Discord",
+    "instagram.com": "Instagram",
+    "office365.com": "Office365",
+    "pinterest.com": "Pinterest",
+    "quora.com": "Quora",
+    "snapchat.com": "Snapchat",
+    "spotify.com": "Spotify",
+    "tumblr.com": "Tumblr",
+    "twitter.com": "Twitter",
+    "yahoo.com": "Yahoo",
+}
+HOLEHE_DOMAIN_URL = {
+    "office365.com": "https://www.microsoft.com/microsoft-365",
+}
+_HOLEHE_CACHE = {}
 
 
 def _http_get(url, params=None, json_accept=False):
@@ -260,6 +302,70 @@ def _extract_username_based_accounts(username_candidates):
     return found
 
 
+def _extract_holehe_accounts(email, diagnostics):
+    """
+    Fallback email existence checker across many public services.
+    It does not always expose profile URLs but can confirm service usage.
+    """
+    normalized = _normalize_email(email)
+    if normalized in _HOLEHE_CACHE:
+        return list(_HOLEHE_CACHE[normalized])
+
+    if not HOLEHE_AVAILABLE:
+        _append_diagnostic(
+            diagnostics,
+            "Module Holehe indisponible (installer les dependances pour une detection etendue).",
+        )
+        return []
+
+    try:
+        modules = import_submodules("holehe.modules")
+        websites = get_functions(modules)
+        if not websites:
+            return []
+
+        async def _run():
+            out = []
+            client = httpx.AsyncClient(timeout=HOLEHE_TIMEOUT)
+            async with trio.open_nursery() as nursery:
+                for website in websites:
+                    nursery.start_soon(launch_module, website, normalized, client, out)
+            await client.aclose()
+            return out
+
+        raw_results = trio.run(_run)
+    except Exception:
+        _append_diagnostic(diagnostics, "Verification etendue indisponible temporairement.")
+        return []
+
+    found = []
+    rate_limited = False
+    for item in raw_results:
+        domain = (item.get("domain") or "").lower().strip()
+        if domain not in HOLEHE_ALLOWED_DOMAINS:
+            continue
+        if item.get("rateLimit"):
+            rate_limited = True
+            continue
+        if not item.get("exists"):
+            continue
+
+        found.append(
+            {
+                "site": HOLEHE_DOMAIN_LABELS.get(domain, domain),
+                "url": HOLEHE_DOMAIN_URL.get(domain, f"https://{domain}"),
+                "source": "Email existence check",
+                "confidence": "medium",
+            }
+        )
+
+    if rate_limited:
+        _append_diagnostic(diagnostics, "Certaines plateformes ont limite la verification etendue.")
+
+    _HOLEHE_CACHE[normalized] = list(found)
+    return found
+
+
 def _dedupe_accounts(accounts):
     by_url = {}
     for account in accounts:
@@ -294,6 +400,10 @@ def find_social_accounts(email, include_probable=True, return_details=False):
     discovered_accounts.extend(_extract_github_public_email_accounts(email, diagnostics))
     discovered_accounts.extend(_extract_github_commit_accounts(email, diagnostics))
     discovered_accounts.extend(_extract_email_mentions(email, username_candidates[0]))
+
+    # If direct signals are empty, run extended email-service checks.
+    if not discovered_accounts:
+        discovered_accounts.extend(_extract_holehe_accounts(email, diagnostics))
 
     if include_probable:
         discovered_accounts.extend(_extract_username_based_accounts(username_candidates))

@@ -31,11 +31,27 @@ def main(email):
     print("\nFOUND LINKED ACCOUNTS:")
     accounts = find_social_accounts(email)
     if accounts:
-        for account in accounts:
-            print(
-                f"- {account['site']}: {account['url']} "
-                f"(source={account['source']}, confidence={account['confidence']})"
-            )
+        verified = [a for a in accounts if a.get("confidence") in {"high", "medium"}]
+        probable = [a for a in accounts if a.get("confidence") == "low"]
+
+        if verified:
+            print("Verified (public evidence):")
+            for account in verified:
+                print(
+                    f"- {account['site']}: {account['url']} "
+                    f"(source={account['source']}, confidence={account['confidence']})"
+                )
+
+        if probable:
+            print("Probable (username match):")
+            for account in probable:
+                print(
+                    f"- {account['site']}: {account['url']} "
+                    f"(source={account['source']}, confidence={account['confidence']})"
+                )
+
+        if not verified and not probable:
+            print("None found")
     else:
         print("None found")
     return 0

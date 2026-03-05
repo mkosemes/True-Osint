@@ -60,7 +60,7 @@ def _render_page(email="", error="", result=None):
 </head>
 <body>
   <h1>Recherche de comptes associes a une adresse email</h1>
-  <p>Entrez un email pour obtenir les comptes avec des indices verifiables.</p>
+  <p>Entrez un email pour obtenir des comptes verifies (high/medium) et probables (low).</p>
   <form method="get" action="/">
     <input type="email" name="email" placeholder="email@example.com" value="{escape(email)}" required />
     <button type="submit">Rechercher</button>

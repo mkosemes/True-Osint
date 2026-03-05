@@ -13,12 +13,40 @@ SOCIAL_SITES = {
 
 HEADERS = {"User-Agent": "True-Osint/1.0 (educational use)"}
 GITHUB_API = "https://api.github.com"
+REQUEST_TIMEOUT = 10
+
+USERNAME_SITES = {
+    "GitHub": "https://github.com/{}",
+    "GitLab": "https://gitlab.com/{}",
+    "Bitbucket": "https://bitbucket.org/{}",
+    "Reddit": "https://www.reddit.com/user/{}",
+    "Medium": "https://medium.com/@{}",
+}
+
+NOT_FOUND_MARKERS = {
+    "GitHub": ("not found", "page not found"),
+    "GitLab": ("not found", "404"),
+    "Bitbucket": ("page not found",),
+    "Reddit": ("sorry, nobody on reddit goes by that name",),
+    "Medium": ("page not found",),
+}
+
+CONFIDENCE_SCORE = {"high": 3, "medium": 2, "low": 1}
+
+
+def _http_get(url, params=None, json_accept=False):
+    headers = dict(HEADERS)
+    if json_accept:
+        headers["Accept"] = "application/vnd.github+json"
+    try:
+        return requests.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
+    except requests.RequestException:
+        return None
 
 
 def _profile_mentions_email(profile_url, email):
-    try:
-        response = requests.get(profile_url, headers=HEADERS, timeout=8)
-    except requests.RequestException:
+    response = _http_get(profile_url)
+    if response is None:
         return False, None
 
     if response.status_code != 200:
@@ -55,33 +83,30 @@ def _extract_github_public_email_accounts(email):
     This is a high-confidence signal because the profile exposes this email.
     """
     found = []
+    response = _http_get(
+        f"{GITHUB_API}/search/users",
+        params={"q": f"\"{email}\" in:email", "per_page": 10},
+        json_accept=True,
+    )
+    if response is None or response.status_code != 200:
+        return found
+
     try:
-        response = requests.get(
-            f"{GITHUB_API}/search/users",
-            params={"q": f"\"{email}\" in:email", "per_page": 10},
-            headers=HEADERS | {"Accept": "application/vnd.github+json"},
-            timeout=10,
-        )
-        if response.status_code != 200:
-            return found
         items = response.json().get("items", [])
-    except (requests.RequestException, ValueError):
+    except ValueError:
         return found
 
     for item in items:
         login = item.get("login")
         if not login:
             continue
+
+        user_response = _http_get(f"{GITHUB_API}/users/{login}", json_accept=True)
+        if user_response is None or user_response.status_code != 200:
+            continue
         try:
-            user_response = requests.get(
-                f"{GITHUB_API}/users/{login}",
-                headers=HEADERS | {"Accept": "application/vnd.github+json"},
-                timeout=10,
-            )
-            if user_response.status_code != 200:
-                continue
             user = user_response.json()
-        except (requests.RequestException, ValueError):
+        except ValueError:
             continue
 
         public_email = (user.get("email") or "").strip().lower()
@@ -104,17 +129,17 @@ def _extract_github_commit_accounts(email):
     author email matches, then map to associated GitHub accounts.
     """
     found = []
+    response = _http_get(
+        f"{GITHUB_API}/search/commits",
+        params={"q": f"author-email:{email}", "per_page": 20},
+        json_accept=True,
+    )
+    if response is None or response.status_code != 200:
+        return found
+
     try:
-        response = requests.get(
-            f"{GITHUB_API}/search/commits",
-            params={"q": f"author-email:{email}", "per_page": 20},
-            headers=HEADERS | {"Accept": "application/vnd.github+json"},
-            timeout=10,
-        )
-        if response.status_code != 200:
-            return found
         commits = response.json().get("items", [])
-    except (requests.RequestException, ValueError):
+    except ValueError:
         return found
 
     seen_logins = set()
@@ -141,8 +166,66 @@ def _extract_github_commit_accounts(email):
     return found
 
 
-def find_social_accounts(email):
-    username = extract_username(email)
+def _extract_username_based_accounts(username):
+    """
+    Fallback when no direct public email evidence exists.
+    Returns possible accounts based on local-part username match.
+    """
+    found = []
+    username_lower = username.lower()
+
+    for site, url_template in USERNAME_SITES.items():
+        candidate_url = url_template.format(username)
+        response = _http_get(candidate_url)
+        if response is None or response.status_code != 200:
+            continue
+
+        page_content = response.text.lower()
+        markers = NOT_FOUND_MARKERS.get(site, ())
+        if any(marker in page_content for marker in markers):
+            continue
+
+        resolved_url = response.url or candidate_url
+        # If redirect lands on a generic page without username, discard it.
+        if username_lower not in resolved_url.lower() and username_lower not in page_content[:5000]:
+            continue
+        if "login" in resolved_url.lower() or "signup" in resolved_url.lower():
+            continue
+
+        found.append(
+            {
+                "site": site,
+                "url": resolved_url,
+                "source": "Username match from email local-part",
+                "confidence": "low",
+            }
+        )
+    return found
+
+
+def _dedupe_accounts(accounts):
+    by_url = {}
+    for account in accounts:
+        url = account["url"]
+        existing = by_url.get(url)
+        if not existing:
+            by_url[url] = account
+            continue
+
+        current_score = CONFIDENCE_SCORE.get(account.get("confidence", "low"), 1)
+        existing_score = CONFIDENCE_SCORE.get(existing.get("confidence", "low"), 1)
+        if current_score > existing_score:
+            by_url[url] = account
+
+    return sorted(
+        by_url.values(),
+        key=lambda item: CONFIDENCE_SCORE.get(item.get("confidence", "low"), 1),
+        reverse=True,
+    )
+
+
+def find_social_accounts(email, include_probable=True):
+    username = extract_username(email).strip()
     discovered_accounts = []
 
     # High-confidence accounts explicitly linked in Gravatar profile
@@ -164,13 +247,7 @@ def find_social_accounts(email):
                 }
             )
 
-    # Deduplicate by URL while preserving order
-    deduped = []
-    seen_urls = set()
-    for account in discovered_accounts:
-        url = account["url"]
-        if url in seen_urls:
-            continue
-        seen_urls.add(url)
-        deduped.append(account)
-    return deduped
+    if include_probable:
+        discovered_accounts.extend(_extract_username_based_accounts(username))
+
+    return _dedupe_accounts(discovered_accounts)

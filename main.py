@@ -29,7 +29,9 @@ def main(email):
 
     # Social accounts discovery with stronger verification signals
     print("\nFOUND LINKED ACCOUNTS:")
-    accounts = find_social_accounts(email)
+    lookup = find_social_accounts(email, return_details=True)
+    accounts = lookup["accounts"]
+    diagnostics = lookup["diagnostics"]
     if accounts:
         verified = [a for a in accounts if a.get("confidence") in {"high", "medium"}]
         probable = [a for a in accounts if a.get("confidence") == "low"]
@@ -52,8 +54,15 @@ def main(email):
 
         if not verified and not probable:
             print("None found")
+            print("No public account evidence found for this email.")
     else:
         print("None found")
+        print("No public account evidence found for this email.")
+
+    if diagnostics:
+        print("\nINFO:")
+        for message in diagnostics:
+            print(f"- {message}")
     return 0
 
 

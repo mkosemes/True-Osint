@@ -1,19 +1,15 @@
+import re
+
 import requests
+
 from core.email_utils import extract_username
 from core.gravatar import gravatar_profile_lookup
 
-SOCIAL_SITES = {
+EMAIL_SCAN_SITES = {
     "GitHub": "https://github.com/{}",
-    "Twitter": "https://twitter.com/{}",
-    "Instagram": "https://www.instagram.com/{}",
-    "Facebook": "https://www.facebook.com/{}",
     "Reddit": "https://www.reddit.com/user/{}",
-    "Medium": "https://medium.com/@{}"
+    "Medium": "https://medium.com/@{}",
 }
-
-HEADERS = {"User-Agent": "True-Osint/1.0 (educational use)"}
-GITHUB_API = "https://api.github.com"
-REQUEST_TIMEOUT = 10
 
 USERNAME_SITES = {
     "GitHub": "https://github.com/{}",
@@ -21,16 +17,26 @@ USERNAME_SITES = {
     "Bitbucket": "https://bitbucket.org/{}",
     "Reddit": "https://www.reddit.com/user/{}",
     "Medium": "https://medium.com/@{}",
+    "Dev.to": "https://dev.to/{}",
+    "Keybase": "https://keybase.io/{}",
+    "Kaggle": "https://www.kaggle.com/{}",
 }
 
 NOT_FOUND_MARKERS = {
     "GitHub": ("not found", "page not found"),
     "GitLab": ("not found", "404"),
-    "Bitbucket": ("page not found",),
+    "Bitbucket": ("page not found", "this workspace is unavailable"),
     "Reddit": ("sorry, nobody on reddit goes by that name",),
     "Medium": ("page not found",),
+    "Dev.to": ("404", "not found"),
+    "Keybase": ("key not found", "not found"),
+    "Kaggle": ("404", "not found"),
 }
 
+HEADERS = {"User-Agent": "True-Osint/1.0 (educational use)"}
+GITHUB_API = "https://api.github.com"
+REQUEST_TIMEOUT = 10
+MAX_USERNAME_CANDIDATES = 5
 CONFIDENCE_SCORE = {"high": 3, "medium": 2, "low": 1}
 
 
@@ -39,21 +45,51 @@ def _http_get(url, params=None, json_accept=False):
     if json_accept:
         headers["Accept"] = "application/vnd.github+json"
     try:
-        return requests.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
+        return requests.get(
+            url,
+            params=params,
+            headers=headers,
+            timeout=REQUEST_TIMEOUT,
+            allow_redirects=True,
+        )
     except requests.RequestException:
         return None
 
 
+def _append_diagnostic(diagnostics, message):
+    if message not in diagnostics:
+        diagnostics.append(message)
+
+
+def _normalize_email(email):
+    return email.strip().lower()
+
+
+def _build_username_candidates(username):
+    clean = re.sub(r"[^A-Za-z0-9._-]", "", username.strip())
+    if not clean:
+        return []
+
+    candidates = [clean]
+    compact = re.sub(r"[._-]+", "", clean)
+    if compact and compact not in candidates:
+        candidates.append(compact)
+
+    parts = [part for part in re.split(r"[._-]+", clean) if part]
+    if len(parts) >= 2:
+        first, last = parts[0], parts[-1]
+        for candidate in (f"{first}{last}", f"{first}_{last}", f"{first}.{last}"):
+            if candidate not in candidates:
+                candidates.append(candidate)
+
+    return candidates[:MAX_USERNAME_CANDIDATES]
+
+
 def _profile_mentions_email(profile_url, email):
     response = _http_get(profile_url)
-    if response is None:
+    if response is None or response.status_code != 200:
         return False, None
-
-    if response.status_code != 200:
-        return False, None
-
-    page_content = response.text.lower()
-    return email.lower() in page_content, response.url
+    return _normalize_email(email) in response.text.lower(), response.url
 
 
 def _extract_gravatar_accounts(email):
@@ -77,18 +113,20 @@ def _extract_gravatar_accounts(email):
     return found
 
 
-def _extract_github_public_email_accounts(email):
-    """
-    Search GitHub users by email and keep only exact public-email matches.
-    This is a high-confidence signal because the profile exposes this email.
-    """
+def _extract_github_public_email_accounts(email, diagnostics):
     found = []
     response = _http_get(
         f"{GITHUB_API}/search/users",
         params={"q": f"\"{email}\" in:email", "per_page": 10},
         json_accept=True,
     )
-    if response is None or response.status_code != 200:
+    if response is None:
+        _append_diagnostic(diagnostics, "GitHub API indisponible temporairement.")
+        return found
+    if response.status_code in {403, 429}:
+        _append_diagnostic(diagnostics, "Limite GitHub API atteinte, recherche partielle.")
+        return found
+    if response.status_code != 200:
         return found
 
     try:
@@ -96,6 +134,7 @@ def _extract_github_public_email_accounts(email):
     except ValueError:
         return found
 
+    target = _normalize_email(email)
     for item in items:
         login = item.get("login")
         if not login:
@@ -109,8 +148,8 @@ def _extract_github_public_email_accounts(email):
         except ValueError:
             continue
 
-        public_email = (user.get("email") or "").strip().lower()
-        if public_email != email.lower():
+        public_email = _normalize_email(user.get("email") or "")
+        if public_email != target:
             continue
         found.append(
             {
@@ -123,18 +162,20 @@ def _extract_github_public_email_accounts(email):
     return found
 
 
-def _extract_github_commit_accounts(email):
-    """
-    Search public commits by author email and keep commits where the exact
-    author email matches, then map to associated GitHub accounts.
-    """
+def _extract_github_commit_accounts(email, diagnostics):
     found = []
     response = _http_get(
         f"{GITHUB_API}/search/commits",
         params={"q": f"author-email:{email}", "per_page": 20},
         json_accept=True,
     )
-    if response is None or response.status_code != 200:
+    if response is None:
+        _append_diagnostic(diagnostics, "Recherche commits GitHub indisponible.")
+        return found
+    if response.status_code in {403, 429}:
+        _append_diagnostic(diagnostics, "Limite GitHub API atteinte, certains comptes peuvent manquer.")
+        return found
+    if response.status_code != 200:
         return found
 
     try:
@@ -142,11 +183,11 @@ def _extract_github_commit_accounts(email):
     except ValueError:
         return found
 
+    target = _normalize_email(email)
     seen_logins = set()
-    target = email.lower()
     for item in commits:
         commit_author = item.get("commit", {}).get("author", {})
-        commit_email = (commit_author.get("email") or "").strip().lower()
+        commit_email = _normalize_email(commit_author.get("email") or "")
         if commit_email != target:
             continue
 
@@ -166,40 +207,56 @@ def _extract_github_commit_accounts(email):
     return found
 
 
-def _extract_username_based_accounts(username):
-    """
-    Fallback when no direct public email evidence exists.
-    Returns possible accounts based on local-part username match.
-    """
+def _extract_email_mentions(email, username):
     found = []
-    username_lower = username.lower()
-
-    for site, url_template in USERNAME_SITES.items():
+    for site, url_template in EMAIL_SCAN_SITES.items():
         candidate_url = url_template.format(username)
-        response = _http_get(candidate_url)
-        if response is None or response.status_code != 200:
+        has_email, resolved_url = _profile_mentions_email(candidate_url, email)
+        if not has_email:
             continue
-
-        page_content = response.text.lower()
-        markers = NOT_FOUND_MARKERS.get(site, ())
-        if any(marker in page_content for marker in markers):
-            continue
-
-        resolved_url = response.url or candidate_url
-        # If redirect lands on a generic page without username, discard it.
-        if username_lower not in resolved_url.lower() and username_lower not in page_content[:5000]:
-            continue
-        if "login" in resolved_url.lower() or "signup" in resolved_url.lower():
-            continue
-
         found.append(
             {
                 "site": site,
-                "url": resolved_url,
-                "source": "Username match from email local-part",
-                "confidence": "low",
+                "url": resolved_url or candidate_url,
+                "source": "Public profile contains email",
+                "confidence": "medium",
             }
         )
+    return found
+
+
+def _extract_username_based_accounts(username_candidates):
+    found = []
+
+    for username in username_candidates:
+        username_lower = username.lower()
+        for site, url_template in USERNAME_SITES.items():
+            candidate_url = url_template.format(username)
+            response = _http_get(candidate_url)
+            if response is None or response.status_code != 200:
+                continue
+
+            page_content = response.text.lower()
+            markers = NOT_FOUND_MARKERS.get(site, ())
+            if any(marker in page_content for marker in markers):
+                continue
+
+            resolved_url = response.url or candidate_url
+            if "login" in resolved_url.lower() or "signup" in resolved_url.lower():
+                continue
+
+            # Skip generic redirects without visible relation to tested username.
+            if username_lower not in resolved_url.lower() and username_lower not in page_content[:5000]:
+                continue
+
+            found.append(
+                {
+                    "site": site,
+                    "url": resolved_url,
+                    "source": f"Username match from email local-part ({username})",
+                    "confidence": "low",
+                }
+            )
     return found
 
 
@@ -211,10 +268,9 @@ def _dedupe_accounts(accounts):
         if not existing:
             by_url[url] = account
             continue
-
-        current_score = CONFIDENCE_SCORE.get(account.get("confidence", "low"), 1)
-        existing_score = CONFIDENCE_SCORE.get(existing.get("confidence", "low"), 1)
-        if current_score > existing_score:
+        if CONFIDENCE_SCORE.get(account.get("confidence", "low"), 1) > CONFIDENCE_SCORE.get(
+            existing.get("confidence", "low"), 1
+        ):
             by_url[url] = account
 
     return sorted(
@@ -224,30 +280,23 @@ def _dedupe_accounts(accounts):
     )
 
 
-def find_social_accounts(email, include_probable=True):
-    username = extract_username(email).strip()
+def find_social_accounts(email, include_probable=True, return_details=False):
+    diagnostics = []
     discovered_accounts = []
 
-    # High-confidence accounts explicitly linked in Gravatar profile
-    discovered_accounts.extend(_extract_gravatar_accounts(email))
-    discovered_accounts.extend(_extract_github_public_email_accounts(email))
-    discovered_accounts.extend(_extract_github_commit_accounts(email))
+    username = extract_username(email).strip()
+    username_candidates = _build_username_candidates(username)
+    if not username_candidates:
+        result = {"accounts": [], "diagnostics": ["Partie locale de l'email invalide."]}
+        return result if return_details else result["accounts"]
 
-    # Medium-confidence accounts where profile page publicly contains exact email
-    for site, url_template in SOCIAL_SITES.items():
-        candidate_url = url_template.format(username)
-        has_email, resolved_url = _profile_mentions_email(candidate_url, email)
-        if has_email:
-            discovered_accounts.append(
-                {
-                    "site": site,
-                    "url": resolved_url or candidate_url,
-                    "source": "Public profile contains email",
-                    "confidence": "medium",
-                }
-            )
+    discovered_accounts.extend(_extract_gravatar_accounts(email))
+    discovered_accounts.extend(_extract_github_public_email_accounts(email, diagnostics))
+    discovered_accounts.extend(_extract_github_commit_accounts(email, diagnostics))
+    discovered_accounts.extend(_extract_email_mentions(email, username_candidates[0]))
 
     if include_probable:
-        discovered_accounts.extend(_extract_username_based_accounts(username))
+        discovered_accounts.extend(_extract_username_based_accounts(username_candidates))
 
-    return _dedupe_accounts(discovered_accounts)
+    result = {"accounts": _dedupe_accounts(discovered_accounts), "diagnostics": diagnostics}
+    return result if return_details else result["accounts"]

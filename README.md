@@ -32,5 +32,11 @@ The tool now prioritizes public, email-based signals:
 - GitHub users exposing the exact email on public profile (high confidence)
 - GitHub public commits authored with the exact email (medium confidence)
 - Public profile pages containing the exact email text (medium confidence)
+- Username fallback on common platforms (low confidence)
 
-If no account is returned, it usually means no public evidence links that email to a profile.
+Results are split into:
+
+- **Verified** (`high` / `medium`): public evidence tied to the email
+- **Probable** (`low`): username similarity from the email local part
+
+If no account is returned, it usually means no public evidence is available for that email.

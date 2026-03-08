@@ -21,6 +21,7 @@ from reportlab.platypus import (
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = Path(os.getenv("INFOSEC_REPORT_ASSETS_DIR", BASE_DIR / "rapport_infosec_assets"))
 OUTPUT_PDF = Path(os.getenv("INFOSEC_REPORT_PDF_PATH", BASE_DIR / "Rapport_Projet_Infosec_DVWA_Simule.pdf"))
+SCREENSHOTS_DIR = Path(os.getenv("INFOSEC_SCREENSHOTS_DIR", BASE_DIR / "screenshots"))
 
 
 SECTIONS = [
@@ -256,6 +257,22 @@ def generate_image(step_id: str, step_text: str, section_name: str, output_path:
     img.save(output_path, "JPEG", quality=88)
 
 
+def get_real_screenshot(step_id: str) -> Path | None:
+    """
+    Return a real screenshot path for a step if present.
+
+    Expected filename format:
+      - 1_1.png / 1_1.jpg / 1_1.jpeg / 1_1.webp  for step 1.1
+      - 3_14.png ... for step 3.14
+    """
+    stem = step_id.replace(".", "_")
+    for ext in (".png", ".jpg", ".jpeg", ".webp"):
+        candidate = SCREENSHOTS_DIR / f"{stem}{ext}"
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def build_pdf(image_entries: list[tuple[str, str, str, Path]]) -> None:
     styles = getSampleStyleSheet()
     styles.add(
@@ -359,8 +376,8 @@ def build_pdf(image_entries: list[tuple[str, str, str, Path]]) -> None:
     elements.append(
         Paragraph(
             "Ce document presente un rendu complet avec une illustration pour chaque instruction numerotee "
-            "du projet. Les captures sont simulees/reconstituees pour reproduire un laboratoire "
-            "Kali Linux + Metasploitable2 + DVWA.",
+            "du projet. Les captures reelles deposees dans le dossier screenshots/ sont utilisees en priorite. "
+            "A defaut, une image de simulation pedagogique est ajoutee.",
             styles["SmallInfo"],
         )
     )
@@ -384,18 +401,30 @@ def build_pdf(image_entries: list[tuple[str, str, str, Path]]) -> None:
 
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
 
     image_entries: list[tuple[str, str, str, Path]] = []
+    real_count = 0
+    simulated_count = 0
     for section_name, steps in SECTIONS:
         for step_id, step_text in steps:
             image_name = f"{step_id.replace('.', '_')}.jpg"
             image_path = OUTPUT_DIR / image_name
-            generate_image(step_id, step_text, section_name, image_path)
+            real_shot = get_real_screenshot(step_id)
+            if real_shot is not None:
+                # Keep the generated assets folder as single source for report images.
+                image_path.write_bytes(real_shot.read_bytes())
+                real_count += 1
+            else:
+                generate_image(step_id, step_text, section_name, image_path)
+                simulated_count += 1
             image_entries.append((section_name, step_id, step_text, image_path))
 
     build_pdf(image_entries)
     print(f"PDF genere: {OUTPUT_PDF}")
     print(f"Nombre d'images generees: {len(image_entries)}")
+    print(f"Captures reelles utilisees: {real_count}")
+    print(f"Captures simulees utilisees: {simulated_count}")
 
 
 if __name__ == "__main__":

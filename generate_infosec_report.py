@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 import textwrap
 
@@ -22,6 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = Path(os.getenv("INFOSEC_REPORT_ASSETS_DIR", BASE_DIR / "rapport_infosec_assets"))
 OUTPUT_PDF = Path(os.getenv("INFOSEC_REPORT_PDF_PATH", BASE_DIR / "Rapport_Projet_Infosec_DVWA_Simule.pdf"))
 SCREENSHOTS_DIR = Path(os.getenv("INFOSEC_SCREENSHOTS_DIR", BASE_DIR / "screenshots"))
+PICTURES_DIR = BASE_DIR / "rapport_infosec_assets" / "Pictures"
 
 
 SECTIONS = [
@@ -257,23 +259,44 @@ def generate_image(step_id: str, step_text: str, section_name: str, output_path:
     img.save(output_path, "JPEG", quality=88)
 
 
-def get_real_screenshot(step_id: str) -> Path | None:
-    """
-    Return a real screenshot path for a step if present.
-
-    Expected filename format:
-      - 1_1.png / 1_1.jpg / 1_1.jpeg / 1_1.webp  for step 1.1
-      - 3_14.png ... for step 3.14
-    """
+def get_real_screenshot(step_id: str, search_dirs: list[Path]) -> Path | None:
+    """Return a real screenshot path if named with the step id."""
     stem = step_id.replace(".", "_")
-    for ext in (".png", ".jpg", ".jpeg", ".webp"):
-        candidate = SCREENSHOTS_DIR / f"{stem}{ext}"
-        if candidate.exists():
-            return candidate
+    for folder in search_dirs:
+        for ext in (".png", ".jpg", ".jpeg", ".webp"):
+            candidate = folder / f"{stem}{ext}"
+            if candidate.exists():
+                return candidate
     return None
 
 
-def build_pdf(image_entries: list[tuple[str, str, str, Path]]) -> None:
+def get_sequence_screenshots(search_dirs: list[Path]) -> list[Path]:
+    """
+    Collect screenshots named is1.png, is2.png, ... from known folders.
+    """
+    seq: list[tuple[int, Path]] = []
+    seen: set[Path] = set()
+    pattern = re.compile(r"^is(\d+)\.(png|jpg|jpeg|webp)$", re.IGNORECASE)
+    for folder in search_dirs:
+        if not folder.exists():
+            continue
+        for p in folder.iterdir():
+            if not p.is_file():
+                continue
+            m = pattern.match(p.name)
+            if not m:
+                continue
+            idx = int(m.group(1))
+            rp = p.resolve()
+            if rp in seen:
+                continue
+            seen.add(rp)
+            seq.append((idx, p))
+    seq.sort(key=lambda x: x[0])
+    return [p for _, p in seq]
+
+
+def build_pdf(image_entries: list[tuple[str, str, str, Path]], missing_count: int) -> None:
     styles = getSampleStyleSheet()
     styles.add(
         ParagraphStyle(
@@ -376,7 +399,15 @@ def build_pdf(image_entries: list[tuple[str, str, str, Path]]) -> None:
     elements.append(
         Paragraph(
             "Ce document presente un rendu complet avec une illustration pour chaque instruction numerotee "
-            "du projet. Seules les captures reelles deposees dans le dossier screenshots/ sont autorisees.",
+            "du projet. Seules les captures reelles deposees dans screenshots/ ou "
+            "rapport_infosec_assets/Pictures/ sont autorisees.",
+            styles["SmallInfo"],
+        )
+    )
+    elements.append(
+        Paragraph(
+            f"Captures reelles integrees: {len(image_entries)} | "
+            f"Instructions sans photo fournie: {missing_count}",
             styles["SmallInfo"],
         )
     )
@@ -399,39 +430,55 @@ def build_pdf(image_entries: list[tuple[str, str, str, Path]]) -> None:
 
 
 def main() -> None:
-    if not SCREENSHOTS_DIR.exists():
+    search_dirs: list[Path] = [SCREENSHOTS_DIR, PICTURES_DIR]
+    available_dirs = [d for d in search_dirs if d.exists()]
+    if not available_dirs:
         raise SystemExit(
-            f"Dossier des captures introuvable: {SCREENSHOTS_DIR}\n"
-            "Creez ce dossier et ajoutez les captures reelles (ex: 1_1.png, 1_2.jpg, ...)."
+            "Aucun dossier de captures trouve.\n"
+            f"Attendus: {SCREENSHOTS_DIR} ou {PICTURES_DIR}"
         )
 
     image_entries: list[tuple[str, str, str, Path]] = []
-    missing_steps: list[str] = []
+    missing_steps: list[tuple[str, str, str]] = []
+    all_steps: list[tuple[str, str, str]] = []
+
     for section_name, steps in SECTIONS:
         for step_id, step_text in steps:
-            real_shot = get_real_screenshot(step_id)
+            all_steps.append((section_name, step_id, step_text))
+            real_shot = get_real_screenshot(step_id, available_dirs)
             if real_shot is not None:
                 image_entries.append((section_name, step_id, step_text, real_shot))
             else:
-                stem = step_id.replace(".", "_")
-                missing_steps.append(f"{step_id} (attendu: {stem}.png/.jpg/.jpeg/.webp)")
+                missing_steps.append((section_name, step_id, step_text))
 
-    if missing_steps:
-        preview = "\n".join(f"- {m}" for m in missing_steps[:25])
-        extra = ""
-        if len(missing_steps) > 25:
-            extra = f"\n... et {len(missing_steps) - 25} autre(s) capture(s) manquante(s)."
+    # Fallback: map sequential files is1.png, is2.png... to remaining steps
+    # in assignment order when explicit step filenames are not used.
+    sequential = get_sequence_screenshots(available_dirs)
+    used_paths = {p.resolve() for _, _, _, p in image_entries}
+    seq_iter = (p for p in sequential if p.resolve() not in used_paths)
+
+    filled_entries: list[tuple[str, str, str, Path]] = []
+    for section_name, step_id, step_text in missing_steps:
+        next_img = next(seq_iter, None)
+        if next_img is None:
+            break
+        filled_entries.append((section_name, step_id, step_text, next_img))
+
+    image_entries.extend(filled_entries)
+    covered_step_ids = {step_id for _, step_id, _, _ in image_entries}
+    uncovered = [item for item in all_steps if item[1] not in covered_step_ids]
+
+    if not image_entries:
         raise SystemExit(
-            "Generation annulee: captures reelles manquantes.\n"
-            "Ajoutez toutes les photos dans screenshots/ avec le nom de l'instruction.\n"
-            f"{preview}{extra}"
+            "Aucune capture reelle exploitable trouvee.\n"
+            "Ajoutez des images nommees 1_1.png (par etape) ou is1.png (sequence)."
         )
 
-    build_pdf(image_entries)
+    build_pdf(image_entries, len(uncovered))
     print(f"PDF genere: {OUTPUT_PDF}")
-    print(f"Nombre d'images generees: {len(image_entries)}")
     print(f"Captures reelles utilisees: {len(image_entries)}")
     print("Captures simulees utilisees: 0")
+    print(f"Instructions sans photo: {len(uncovered)}")
 
 
 if __name__ == "__main__":

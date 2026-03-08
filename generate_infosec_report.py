@@ -258,6 +258,53 @@ def build_pdf(image_entries: list[tuple[str, str, str, Path]]) -> None:
     styles = getSampleStyleSheet()
     styles.add(
         ParagraphStyle(
+            name="CoverTitle",
+            parent=styles["Title"],
+            fontSize=24,
+            leading=30,
+            alignment=1,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="CoverSubtitle",
+            parent=styles["Heading2"],
+            fontSize=14,
+            leading=20,
+            alignment=1,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="CoverMeta",
+            parent=styles["Normal"],
+            fontSize=12,
+            leading=18,
+            alignment=1,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="CoverNameLabel",
+            parent=styles["Normal"],
+            fontSize=12,
+            leading=18,
+            alignment=1,
+            spaceBefore=10,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="CoverName",
+            parent=styles["Heading3"],
+            fontSize=14,
+            leading=20,
+            alignment=1,
+            textColor=colors.HexColor("#0b3d91"),
+        )
+    )
+    styles.add(
+        ParagraphStyle(
             name="SmallInfo",
             parent=styles["Normal"],
             fontSize=9,
@@ -289,22 +336,24 @@ def build_pdf(image_entries: list[tuple[str, str, str, Path]]) -> None:
     )
 
     elements = []
-    elements.append(Paragraph("Rapport Projet Infosec", styles["Title"]))
-    elements.append(Spacer(1, 8))
+    elements.append(Spacer(1, 4 * cm))
+    elements.append(Paragraph("Rapport Projet Infosec", styles["CoverTitle"]))
+    elements.append(Spacer(1, 14))
     elements.append(
         Paragraph(
-            "Analyse de vulnerabilites et securisation d'applications web : "
-            "Etude de cas pratique sur l'environnement DVWA",
-            styles["Heading2"],
+            "Analyse de vulnérabilités et sécurisation d’applications web : "
+            "Étude de cas pratique sur l'environnement DVWA",
+            styles["CoverSubtitle"],
         )
     )
-    elements.append(Spacer(1, 10))
-    elements.append(Paragraph("<b>Examen :</b> InfoSec", styles["Normal"]))
-    elements.append(Paragraph("<b>Niveau :</b> Licence 2 Big Data", styles["Normal"]))
-    elements.append(Paragraph("<b>Annee :</b> 2025/2026", styles["Normal"]))
-    elements.append(Paragraph("<b>Encadrant :</b> Dr B. DIOUF", styles["Normal"]))
-    elements.append(Paragraph("<b>Presente par :</b> [Nom de l'etudiant]", styles["Normal"]))
-    elements.append(Spacer(1, 12))
+    elements.append(Spacer(1, 1.8 * cm))
+    elements.append(Paragraph("<b>Examen:</b> Infosec", styles["CoverMeta"]))
+    elements.append(Paragraph("<b>Niveau :</b> Licence 2 Big Data", styles["CoverMeta"]))
+    elements.append(Paragraph("<b>Année :</b> 2025/2026", styles["CoverMeta"]))
+    elements.append(Spacer(1, 1.2 * cm))
+    elements.append(Paragraph("Présenté par :", styles["CoverNameLabel"]))
+    elements.append(Paragraph("Mouhamadou Moustapha Souane", styles["CoverName"]))
+    elements.append(Spacer(1, 1.0 * cm))
     elements.append(
         Paragraph(
             "Ce document presente un rendu complet avec une illustration pour chaque instruction numerotee "

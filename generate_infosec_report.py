@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import textwrap
 
@@ -17,8 +18,9 @@ from reportlab.platypus import (
 )
 
 
-OUTPUT_DIR = Path("./rapport_infosec_assets")
-OUTPUT_PDF = Path("/workspace/Rapport_Projet_Infosec_DVWA_Simule.pdf")
+BASE_DIR = Path(__file__).resolve().parent
+OUTPUT_DIR = Path(os.getenv("INFOSEC_REPORT_ASSETS_DIR", BASE_DIR / "rapport_infosec_assets"))
+OUTPUT_PDF = Path(os.getenv("INFOSEC_REPORT_PDF_PATH", BASE_DIR / "Rapport_Projet_Infosec_DVWA_Simule.pdf"))
 
 
 SECTIONS = [

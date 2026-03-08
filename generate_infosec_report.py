@@ -17,7 +17,7 @@ from reportlab.platypus import (
 )
 
 
-OUTPUT_DIR = Path("/workspace/rapport_infosec_assets")
+OUTPUT_DIR = Path("./rapport_infosec_assets")
 OUTPUT_PDF = Path("/workspace/Rapport_Projet_Infosec_DVWA_Simule.pdf")
 
 

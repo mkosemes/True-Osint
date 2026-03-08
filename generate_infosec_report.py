@@ -1,32 +1,20 @@
 from __future__ import annotations
 
 import os
-import re
 from pathlib import Path
-import textwrap
 
-from PIL import Image, ImageDraw, ImageFont
-from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Paragraph,
-    Spacer,
-    Image as RLImage,
-    PageBreak,
-)
-
+from reportlab.platypus import Image as RLImage
+from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
 BASE_DIR = Path(__file__).resolve().parent
-OUTPUT_DIR = Path(os.getenv("INFOSEC_REPORT_ASSETS_DIR", BASE_DIR / "rapport_infosec_assets"))
 OUTPUT_PDF = Path(os.getenv("INFOSEC_REPORT_PDF_PATH", BASE_DIR / "Rapport_Projet_Infosec_DVWA_Simule.pdf"))
-SCREENSHOTS_DIR = Path(os.getenv("INFOSEC_SCREENSHOTS_DIR", BASE_DIR / "screenshots"))
 PICTURES_DIR = BASE_DIR / "rapport_infosec_assets" / "Pictures"
 
-
-SECTIONS = [
+SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
     (
         "1. Attaque XSS (Cross-Site Scripting) avec DVWA",
         [
@@ -151,180 +139,62 @@ SECTIONS = [
     ),
 ]
 
-
-def fake_console_lines(step_id: str, text: str) -> list[str]:
-    lower = text.lower()
-    if "adresse ip" in lower:
-        return [
-            "kali@lab:~$ ip a | rg \"inet \"",
-            "inet 192.168.56.20/24 brd 192.168.56.255 scope global eth0",
-            "msf2@target:~$ ifconfig eth0",
-            "inet addr:192.168.56.10  Bcast:192.168.56.255  Mask:255.255.255.0",
-        ]
-    if "xss" in lower:
-        return [
-            "Payload teste: <script>alert('XSS-" + step_id + "')</script>",
-            "Observation: execution JavaScript selon niveau de securite DVWA.",
-            "Trace navigateur: requete HTTP 200 + rendu page vulnerabilite.",
-            "Validation: preuve visuelle d'alerte cote client.",
-        ]
-    if "csrf" in lower:
-        return [
-            "GET /dvwa/vulnerabilities/csrf/?password_new=1234&password_conf=1234&Change=Change HTTP/1.1",
-            "Cookie: PHPSESSID=victim_session",
-            "Resultat: mot de passe modifie sans consentement explicite.",
-            "Defense attendue: token anti-CSRF + verification Origin/Referer.",
-        ]
-    if "upload" in lower or "televers" in lower:
-        return [
-            "POST /dvwa/vulnerabilities/upload/ HTTP/1.1",
-            "Content-Type: multipart/form-data; boundary=----lab",
-            "Fichier: php-backdoor.php  => Stockage: /hackable/uploads/",
-            "Verification: acces direct via URL du fichier televerse.",
-        ]
-    if "reverse shell" in lower or "netcat" in lower:
-        return [
-            "kali@lab:~$ nc -l -v -p 1234",
-            "listening on [any] 1234 ...",
-            "connect to [192.168.56.20] from (UNKNOWN) [192.168.56.10] 47312",
-            "www-data@metasploitable:/var/www/dvwa$ whoami",
-        ]
-    if "cookie" in lower or "session" in lower:
-        return [
-            "SELECT value FROM cookie ORDER BY id DESC LIMIT 1;",
-            "PHPSESSID=9f8ce3d2a0f1b1e8f2e4b9e7f0c1d2a3",
-            "Burp Repeater: Cookie remplace pour usurpation de session.",
-            "Resultat: acces au compte victime confirme.",
-        ]
-    if "sql" in lower:
-        return [
-            "Input de test: ' OR '1'='1' -- -",
-            "Requete observee: SELECT * FROM users WHERE ...",
-            "Resultat: contournement login / extraction donnees possible.",
-            "Defense: prepared statements + validation stricte.",
-        ]
-    if "ssl" in lower or "https" in lower:
-        return [
-            "sudo a2enmod ssl && sudo service apache2 restart",
-            "VirtualHost *:443 configure avec certificat valide.",
-            "Test: curl -I https://192.168.56.10",
-            "Resultat: trafic chiffre TLS operationnel.",
-        ]
-    return [
-        f"Etape {step_id} executee dans le laboratoire virtuel.",
-        "Kali Linux: interception et verification des requetes HTTP.",
-        "Metasploitable2: service DVWA cible etat vulnerable.",
-        "Observation: comportement conforme au scenario de test.",
-    ]
+# Mapping manuel valide visuellement (instruction -> captures correspondantes)
+MANUAL_IMAGE_MAP: dict[str, list[str]] = {
+    "1.1": ["is1.png"],
+    "1.2": ["is2.png"],
+    "1.5": ["is3.png"],
+    "1.6": ["is5.png", "is6.png"],
+    "1.8": ["is4.png"],
+    "1.10": ["is7.png"],
+    "1.12": ["is8.png"],
+    "1.13": ["is9.png", "is10.png", "is11.png"],
+    "1.20": ["is12.png", "is13.png", "is14.png"],
+    "1.22": ["is15.png", "is16.png"],
+    "1.24": ["is17.png"],
+    "1.26": ["is18.png"],
+    "2.6": ["is19.png"],
+    "2.8": ["is20.png"],
+    "3.2": ["is21.png"],
+    "3.7": ["is22.png", "is24.png"],
+    "3.8": ["is23.png"],
+    "3.9": ["is25.png", "is26.png", "is27.png"],
+    "3.13": ["is28.png"],
+    "3.14": ["is29.png", "is30.png"],
+    "3.15": ["is31.png"],
+    "4.12": ["is32.png"],
+    "5.1": ["is33.png"],
+    "5.2": ["is34.png"],
+    "5.3": ["is35.png", "is36.png"],
+}
 
 
-def generate_image(step_id: str, step_text: str, section_name: str, output_path: Path) -> None:
-    width, height = 1400, 900
-    img = Image.new("RGB", (width, height), (26, 30, 36))
-    draw = ImageDraw.Draw(img)
-    font_title = ImageFont.load_default(size=34)
-    font_sub = ImageFont.load_default(size=22)
-    font_text = ImageFont.load_default(size=20)
+def resolve_mapped_images() -> dict[str, list[Path]]:
+    resolved: dict[str, list[Path]] = {}
+    missing: list[str] = []
+    for step_id, file_names in MANUAL_IMAGE_MAP.items():
+        step_images: list[Path] = []
+        for name in file_names:
+            p = PICTURES_DIR / name
+            if p.exists():
+                step_images.append(p)
+            else:
+                missing.append(str(p))
+        if step_images:
+            resolved[step_id] = step_images
 
-    draw.rectangle((0, 0, width, 72), fill=(13, 17, 23))
-    draw.text((28, 22), f"Capture simulee - Etape {step_id}", fill=(141, 241, 157), font=font_title)
+    if missing:
+        joined = "\n".join(f"- {m}" for m in missing)
+        raise SystemExit(f"Fichiers manquants dans le mapping manuel:\n{joined}")
 
-    draw.rectangle((26, 94, width - 26, 260), fill=(35, 40, 48), outline=(80, 90, 105), width=2)
-    draw.text((44, 110), "Contexte laboratoire", fill=(255, 221, 130), font=font_sub)
-    draw.text((44, 150), "Kali Linux 2025.4  |  Metasploitable2  |  DVWA  |  Burp Suite CE", fill=(220, 225, 230), font=font_text)
-
-    wrapped_section = textwrap.wrap(section_name, width=88)
-    y = 186
-    for line in wrapped_section[:2]:
-        draw.text((44, y), line, fill=(204, 214, 224), font=font_text)
-        y += 28
-
-    draw.rectangle((26, 278, width - 26, height - 26), fill=(15, 18, 22), outline=(80, 90, 105), width=2)
-    draw.text((44, 298), "Instruction", fill=(110, 190, 255), font=font_sub)
-
-    instruction_lines = textwrap.wrap(step_text, width=106)
-    y = 332
-    for line in instruction_lines:
-        draw.text((44, y), f"- {line}", fill=(229, 233, 240), font=font_text)
-        y += 28
-
-    draw.text((44, y + 12), "Sortie / preuve technique (simulation):", fill=(255, 221, 130), font=font_sub)
-    y += 46
-
-    for console_line in fake_console_lines(step_id, step_text):
-        draw.text((58, y), console_line, fill=(141, 241, 157), font=font_text)
-        y += 28
-
-    draw.text((44, height - 58), "Note: image reconstituee a des fins pedagogiques.", fill=(180, 187, 196), font=font_text)
-    img.save(output_path, "JPEG", quality=88)
+    return resolved
 
 
-def get_real_screenshot(step_id: str, search_dirs: list[Path]) -> Path | None:
-    """Return a real screenshot path if named with the step id."""
-    stem = step_id.replace(".", "_")
-    for folder in search_dirs:
-        for ext in (".png", ".jpg", ".jpeg", ".webp"):
-            candidate = folder / f"{stem}{ext}"
-            if candidate.exists():
-                return candidate
-    return None
-
-
-def get_sequence_screenshots(search_dirs: list[Path]) -> list[Path]:
-    """
-    Collect screenshots named is1.png, is2.png, ... from known folders.
-    """
-    seq: list[tuple[int, Path]] = []
-    seen: set[Path] = set()
-    pattern = re.compile(r"^is(\d+)\.(png|jpg|jpeg|webp)$", re.IGNORECASE)
-    for folder in search_dirs:
-        if not folder.exists():
-            continue
-        for p in folder.iterdir():
-            if not p.is_file():
-                continue
-            m = pattern.match(p.name)
-            if not m:
-                continue
-            idx = int(m.group(1))
-            rp = p.resolve()
-            if rp in seen:
-                continue
-            seen.add(rp)
-            seq.append((idx, p))
-    seq.sort(key=lambda x: x[0])
-    return [p for _, p in seq]
-
-
-def build_pdf(image_entries: list[tuple[str, str, str, Path]], missing_count: int) -> None:
+def build_pdf(mapped_images: dict[str, list[Path]]) -> tuple[int, int]:
     styles = getSampleStyleSheet()
-    styles.add(
-        ParagraphStyle(
-            name="CoverTitle",
-            parent=styles["Title"],
-            fontSize=24,
-            leading=30,
-            alignment=1,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="CoverSubtitle",
-            parent=styles["Heading2"],
-            fontSize=14,
-            leading=20,
-            alignment=1,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="CoverMeta",
-            parent=styles["Normal"],
-            fontSize=12,
-            leading=18,
-            alignment=1,
-        )
-    )
+    styles.add(ParagraphStyle(name="CoverTitle", parent=styles["Title"], fontSize=24, leading=30, alignment=1))
+    styles.add(ParagraphStyle(name="CoverSubtitle", parent=styles["Heading2"], fontSize=14, leading=20, alignment=1))
+    styles.add(ParagraphStyle(name="CoverMeta", parent=styles["Normal"], fontSize=12, leading=18, alignment=1))
     styles.add(
         ParagraphStyle(
             name="CoverNameLabel",
@@ -365,6 +235,15 @@ def build_pdf(image_entries: list[tuple[str, str, str, Path]], missing_count: in
             spaceAfter=4,
         )
     )
+    styles.add(
+        ParagraphStyle(
+            name="MissingShot",
+            parent=styles["Normal"],
+            fontSize=9,
+            leading=12,
+            textColor=colors.HexColor("#B00020"),
+        )
+    )
 
     doc = SimpleDocTemplate(
         str(OUTPUT_PDF),
@@ -398,87 +277,51 @@ def build_pdf(image_entries: list[tuple[str, str, str, Path]], missing_count: in
     elements.append(Spacer(1, 1.0 * cm))
     elements.append(
         Paragraph(
-            "Ce document presente un rendu complet avec une illustration pour chaque instruction numerotee "
-            "du projet. Seules les captures reelles deposees dans screenshots/ ou "
-            "rapport_infosec_assets/Pictures/ sont autorisees.",
-            styles["SmallInfo"],
-        )
-    )
-    elements.append(
-        Paragraph(
-            f"Captures reelles integrees: {len(image_entries)} | "
-            f"Instructions sans photo fournie: {missing_count}",
+            "Ce document utilise uniquement des captures reelles. "
+            "La correspondance photo-instruction est effectuee manuellement.",
             styles["SmallInfo"],
         )
     )
     elements.append(PageBreak())
 
-    current_section = None
-    for section_name, step_id, step_text, image_path in image_entries:
-        if section_name != current_section:
-            elements.append(Paragraph(section_name, styles["Heading2"]))
-            elements.append(Spacer(1, 6))
-            current_section = section_name
+    used_images_count = 0
+    missing_steps_count = 0
 
-        elements.append(Paragraph(f"Instruction {step_id}", styles["StepTitle"]))
-        elements.append(Paragraph(step_text, styles["Normal"]))
-        elements.append(Spacer(1, 5))
-        elements.append(RLImage(str(image_path), width=16.0 * cm, height=10.2 * cm))
-        elements.append(Spacer(1, 10))
+    for section_name, steps in SECTIONS:
+        elements.append(Paragraph(section_name, styles["Heading2"]))
+        elements.append(Spacer(1, 6))
+
+        for step_id, step_text in steps:
+            elements.append(Paragraph(f"Instruction {step_id}", styles["StepTitle"]))
+            elements.append(Paragraph(step_text, styles["Normal"]))
+            elements.append(Spacer(1, 4))
+
+            images = mapped_images.get(step_id, [])
+            if images:
+                for image_path in images:
+                    elements.append(RLImage(str(image_path), width=16.0 * cm, height=10.2 * cm))
+                    elements.append(Spacer(1, 6))
+                    used_images_count += 1
+            else:
+                elements.append(Paragraph("Capture reelle non fournie pour cette instruction.", styles["MissingShot"]))
+                elements.append(Spacer(1, 6))
+                missing_steps_count += 1
 
     doc.build(elements)
+    return used_images_count, missing_steps_count
 
 
 def main() -> None:
-    search_dirs: list[Path] = [SCREENSHOTS_DIR, PICTURES_DIR]
-    available_dirs = [d for d in search_dirs if d.exists()]
-    if not available_dirs:
-        raise SystemExit(
-            "Aucun dossier de captures trouve.\n"
-            f"Attendus: {SCREENSHOTS_DIR} ou {PICTURES_DIR}"
-        )
+    if not PICTURES_DIR.exists():
+        raise SystemExit(f"Dossier des captures introuvable: {PICTURES_DIR}")
 
-    image_entries: list[tuple[str, str, str, Path]] = []
-    missing_steps: list[tuple[str, str, str]] = []
-    all_steps: list[tuple[str, str, str]] = []
+    mapped_images = resolve_mapped_images()
+    used_images_count, missing_steps_count = build_pdf(mapped_images)
 
-    for section_name, steps in SECTIONS:
-        for step_id, step_text in steps:
-            all_steps.append((section_name, step_id, step_text))
-            real_shot = get_real_screenshot(step_id, available_dirs)
-            if real_shot is not None:
-                image_entries.append((section_name, step_id, step_text, real_shot))
-            else:
-                missing_steps.append((section_name, step_id, step_text))
-
-    # Fallback: map sequential files is1.png, is2.png... to remaining steps
-    # in assignment order when explicit step filenames are not used.
-    sequential = get_sequence_screenshots(available_dirs)
-    used_paths = {p.resolve() for _, _, _, p in image_entries}
-    seq_iter = (p for p in sequential if p.resolve() not in used_paths)
-
-    filled_entries: list[tuple[str, str, str, Path]] = []
-    for section_name, step_id, step_text in missing_steps:
-        next_img = next(seq_iter, None)
-        if next_img is None:
-            break
-        filled_entries.append((section_name, step_id, step_text, next_img))
-
-    image_entries.extend(filled_entries)
-    covered_step_ids = {step_id for _, step_id, _, _ in image_entries}
-    uncovered = [item for item in all_steps if item[1] not in covered_step_ids]
-
-    if not image_entries:
-        raise SystemExit(
-            "Aucune capture reelle exploitable trouvee.\n"
-            "Ajoutez des images nommees 1_1.png (par etape) ou is1.png (sequence)."
-        )
-
-    build_pdf(image_entries, len(uncovered))
     print(f"PDF genere: {OUTPUT_PDF}")
-    print(f"Captures reelles utilisees: {len(image_entries)}")
+    print(f"Captures reelles utilisees: {used_images_count}")
     print("Captures simulees utilisees: 0")
-    print(f"Instructions sans photo: {len(uncovered)}")
+    print(f"Instructions sans photo: {missing_steps_count}")
 
 
 if __name__ == "__main__":

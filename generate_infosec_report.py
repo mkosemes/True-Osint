@@ -376,8 +376,7 @@ def build_pdf(image_entries: list[tuple[str, str, str, Path]]) -> None:
     elements.append(
         Paragraph(
             "Ce document presente un rendu complet avec une illustration pour chaque instruction numerotee "
-            "du projet. Les captures reelles deposees dans le dossier screenshots/ sont utilisees en priorite. "
-            "A defaut, une image de simulation pedagogique est ajoutee.",
+            "du projet. Seules les captures reelles deposees dans le dossier screenshots/ sont autorisees.",
             styles["SmallInfo"],
         )
     )
@@ -400,31 +399,39 @@ def build_pdf(image_entries: list[tuple[str, str, str, Path]]) -> None:
 
 
 def main() -> None:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+    if not SCREENSHOTS_DIR.exists():
+        raise SystemExit(
+            f"Dossier des captures introuvable: {SCREENSHOTS_DIR}\n"
+            "Creez ce dossier et ajoutez les captures reelles (ex: 1_1.png, 1_2.jpg, ...)."
+        )
 
     image_entries: list[tuple[str, str, str, Path]] = []
-    real_count = 0
-    simulated_count = 0
+    missing_steps: list[str] = []
     for section_name, steps in SECTIONS:
         for step_id, step_text in steps:
-            image_name = f"{step_id.replace('.', '_')}.jpg"
-            image_path = OUTPUT_DIR / image_name
             real_shot = get_real_screenshot(step_id)
             if real_shot is not None:
-                # Keep the generated assets folder as single source for report images.
-                image_path.write_bytes(real_shot.read_bytes())
-                real_count += 1
+                image_entries.append((section_name, step_id, step_text, real_shot))
             else:
-                generate_image(step_id, step_text, section_name, image_path)
-                simulated_count += 1
-            image_entries.append((section_name, step_id, step_text, image_path))
+                stem = step_id.replace(".", "_")
+                missing_steps.append(f"{step_id} (attendu: {stem}.png/.jpg/.jpeg/.webp)")
+
+    if missing_steps:
+        preview = "\n".join(f"- {m}" for m in missing_steps[:25])
+        extra = ""
+        if len(missing_steps) > 25:
+            extra = f"\n... et {len(missing_steps) - 25} autre(s) capture(s) manquante(s)."
+        raise SystemExit(
+            "Generation annulee: captures reelles manquantes.\n"
+            "Ajoutez toutes les photos dans screenshots/ avec le nom de l'instruction.\n"
+            f"{preview}{extra}"
+        )
 
     build_pdf(image_entries)
     print(f"PDF genere: {OUTPUT_PDF}")
     print(f"Nombre d'images generees: {len(image_entries)}")
-    print(f"Captures reelles utilisees: {real_count}")
-    print(f"Captures simulees utilisees: {simulated_count}")
+    print(f"Captures reelles utilisees: {len(image_entries)}")
+    print("Captures simulees utilisees: 0")
 
 
 if __name__ == "__main__":

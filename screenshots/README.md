@@ -1,6 +1,7 @@
 # Captures reelles pour le rapport
 
-Le script `generate_infosec_report.py` utilise en priorite les captures reelles deposees ici.
+Le script `generate_infosec_report.py` utilise uniquement les captures reelles deposees ici.
+Si une capture manque, la generation du PDF est arretee.
 
 ## Nommage attendu
 

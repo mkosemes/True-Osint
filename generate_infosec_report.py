@@ -15,7 +15,7 @@ from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, 
 BASE_DIR = Path(__file__).resolve().parent
 SCREENSHOTS_DIR = BASE_DIR / "screenshots"
 OUTPUT_PDF = Path(os.getenv("INFOSEC_REPORT_PDF_PATH", BASE_DIR / "Rapport_Projet_Infosec_DVWA_Simule.pdf"))
-LOGO_MINISTRY = BASE_DIR / "assets" / "logos" / "logo_mesri.png"
+LOGO_MINISTRY = BASE_DIR / "screenshots" / "capt12.png"
 LOGO_DIT = BASE_DIR / "assets" / "logos" / "logo_dit.png"
 
 
@@ -228,6 +228,59 @@ STEP_RESULTS: dict[str, str] = {
     "4.13": "Via Burp, le remplacement de cookie permet l'usurpation de session. L'identite de la victime peut etre prise.",
 }
 
+IMAGE_DETAILS: dict[str, str] = {
+    "2.jpeg": "La capture montre la page d'accueil Metasploitable2 avec la liste des applications exposees, dont DVWA. On observe clairement l'URL cible et la disponibilite des services web.",
+    "5.jpeg": "Cette vue presente le formulaire d'authentification DVWA avec les champs admin/password renseignes, juste avant validation.",
+    "we.jpeg": "L'ecran d'authentification DVWA confirme l'acces a la page de login avec le compte administrateur en preparation.",
+    "q.jpeg": "La page DVWA Security est ouverte. Le menu de securite est visible et le niveau peut etre bascule entre low, medium et high.",
+    "8.jpeg": "Le formulaire XSS Reflected contient une charge JavaScript injectee dans le parametre name. La zone de rendu montre l'entree non neutralisee.",
+    "9.jpeg": "La boite de dialogue d'alerte JavaScript apparait dans le navigateur. Cela valide l'execution effective de la charge XSS cote client.",
+    "w.jpeg": "Alerte JavaScript visible sur le navigateur avec message personnalise. L'injection reflected produit une preuve d'execution immediate.",
+    "t.jpeg": "La page XSS Reflected affiche la charge interpretee dans le contenu de reponse. Le comportement confirme une mauvaise neutralisation de la sortie HTML.",
+    "r.jpeg": "La fenetre View Source expose le code PHP du module XSS Reflected. On distingue la logique de traitement et la defense appliquee en niveau eleve.",
+    "u.jpeg": "Le formulaire XSS Stored contient un script injecte dans le champ message du guestbook. Le payload est pret a etre persiste en base.",
+    "s.jpeg": "La page XSS Stored affiche des commentaires deja injectes dans le guestbook. On voit la persistence de contenu potentiellement executable.",
+    "o.jpeg": "Un utilisateur connecte ouvre la page et voit une alerte provenant d'une charge stockee. Cela montre l'impact inter-utilisateurs de la XSS stored.",
+    "i.jpeg": "Connexion au compte smithy sur DVWA. Cette etape sert a verifier l'effet de la charge stockee sur un second profil.",
+    "l.jpeg": "Le champ Command Execution contient une entree concatenee IP + operateur shell. C'est la phase d'injection de commande.",
+    "f.jpeg": "Le module Command Execution retourne la sortie de commandes systeme dans la page (listing de fichiers). La commande injectee est executee cote serveur.",
+    "h.jpeg": "La sortie inclut des lignes de /etc/passwd, preuve d'une injection de commande reussie avec lecture de donnees systeme sensibles.",
+    "k.jpeg": "La vue source du module Command Execution montre la logique de filtrage medium, basee sur substitution de caracteres.",
+    "m.jpeg": "En niveau medium, la commande ls parvient encore a produire une sortie. Le contournement du filtrage est visible.",
+    "x.jpeg": "En niveau high, le formulaire retourne une erreur d'IP invalide. Le controle de format bloque les entrees malveillantes.",
+    "z.jpeg": "Le code source high de Command Execution affiche une validation stricte des octets IP. La defense est plus robuste.",
+    "c.jpeg": "L'URL FI contient page=/etc/passwd et la reponse affiche le contenu du fichier. La faille File Inclusion est materialisee.",
+    "b.jpeg": "Le formulaire CSRF de changement de mot de passe indique Password Changed. Une requete sensible est executee sans protection forte.",
+    "nm.jpeg": "La page CSRF est ouverte avec les champs de nouveau mot de passe et confirmation. Le contexte d'attaque est en niveau low.",
+    "v.jpeg": "La fenetre source CSRF detaille les parametres GET password_new/password_conf et la requete SQL de mise a jour.",
+    "yu.jpeg": "Le menu Upload de DVWA est affiche avec selection de fichier backdoor. La phase de televersement est preparee.",
+    "ui.jpeg": "Le message successfully uploaded confirme que le fichier php-backdoor.php est depose dans hackable/uploads.",
+    "ty.jpeg": "Le formulaire Upload montre la selection explicite de php-backdoor.php avant envoi.",
+    "tyg.jpeg": "Le formulaire Upload montre la selection de php-reverse-shell.php, utilise pour etablir une connexion inverse.",
+    "er.jpeg": "La fenetre source du module Upload expose la logique de traitement du fichier cote serveur.",
+    "op.jpeg": "Le code source medium du module Upload montre des controles de type MIME/extension et de taille.",
+    "opikj.jpeg": "Le code source high du module Upload met en oeuvre une validation plus stricte des extensions autorisees.",
+    "rt.jpeg": "L'explorateur de fichiers Kali montre les webshells disponibles (php-backdoor.php, php-reverse-shell.php).",
+    "oi.jpeg": "Interception Burp: la requete multipart montre filename et Content-Type modifies a la volee pour contourner le filtre.",
+    "fgt.jpeg": "Le panneau Burp affiche l'entete HTTP de la requete Upload et le cookie de session. L'interception active est confirmee.",
+    "kk.jpeg": "La requete HTTP Upload capturee dans Burp inclut les parametres du fichier et les metadonnees modifiables.",
+    "as.jpeg": "Burp Suite en mode Intercept ON. Le proxy est pret a manipuler les requetes entre navigateur et DVWA.",
+    "sd.jpeg": "Burp affiche une requete GET avec les en-tetes et cookie de session. Cette vue sert a verifier/intervertir les sessions.",
+    "io.jpeg": "La page de backdoor PHP est accessible via URL et expose des fonctions d'execution de commandes et requetes SQL.",
+    "iopl.jpeg": "Le terminal Kali recoit une connexion reverse shell sur port 1234. L'acces distant au serveur compromis est actif.",
+    "hyu.jpeg": "Netcat ecoute sur le port TCP 1234 dans le terminal Kali (listener en attente de connexion).",
+    "frty.jpeg": "Le script php-reverse-shell.php est edite: la variable $ip de retour est configuree vers la machine Kali.",
+    "kjh.jpeg": "Autre vue de modification de la variable IP dans php-reverse-shell.php avant televersement.",
+    "hyujkf.jpeg": "Etat du service MariaDB sur Kali: actif et operationnel pour stocker les cookies exfiltres.",
+    "knd.jpeg": "Console MariaDB: creation de la base maBD et de la table cookie validee par requetes SQL.",
+    "thq.jpeg": "Verification SQL de la presence de la table cookie dans la base maBD.",
+    "bv.jpeg": "Edition du script store_cookie.php avec insertion du parametre cookie dans la table en base.",
+    "WhatsApp Image 2026-03-09 at 11.31.50.jpeg": "Edition du script view_cookies.php pour lister les cookies stockes et leurs metadonnees.",
+    "sw.jpeg": "Configuration proxy systeme du navigateur (127.0.0.1:8080) pour rediriger le trafic vers Burp.",
+    "df.jpeg": "Parametrage manuel du proxy HTTP/HTTPS dans le navigateur, necessaire pour interception TLS/HTTP.",
+    "7.jpeg": "Page d'accueil DVWA chargee avec session admin active, confirmant le bon etat de la plateforme de test.",
+}
+
 
 def list_available_images() -> list[str]:
     if not SCREENSHOTS_DIR.exists():
@@ -292,6 +345,25 @@ def result_text(step_id: str, step_instruction: str) -> str:
     )
 
 
+def image_detail(image_name: str, step_id: str, instruction: str) -> str:
+    if image_name in IMAGE_DETAILS:
+        return IMAGE_DETAILS[image_name]
+    section = step_id.split(".")[0]
+    if section == "1":
+        return "La capture illustre une etape d'analyse XSS/commande/FI dans DVWA, avec visualisation du comportement de l'application et du niveau de securite."
+    if section == "2":
+        return "La capture montre le parcours CSRF autour du formulaire de changement de mot de passe et de ses effets sur les comptes cibles."
+    if section == "3":
+        return "La capture documente le cycle Upload/Burp/Execution, depuis la selection du fichier jusqu'a la verification d'execution."
+    if section == "4":
+        return "La capture presente le flux de vol de cookies: service de stockage, script de collecte et exploitation de session."
+    if section == "5":
+        return "La capture illustre les manipulations SQLi et leurs retombees sur la lecture des donnees applicatives."
+    if section == "6":
+        return "La capture sert de support a la phase de mitigation securitaire en lien avec les attaques precedentes."
+    return f"La capture est coherente avec l'instruction {instruction}."
+
+
 def build_cover(elements: list, styles) -> None:
     left_logo = RLImage(str(LOGO_MINISTRY), width=3.8 * cm, height=3.0 * cm) if LOGO_MINISTRY.exists() else Paragraph("Logo MESRI", styles["Normal"])
     right_logo = RLImage(str(LOGO_DIT), width=3.8 * cm, height=3.0 * cm) if LOGO_DIT.exists() else Paragraph("Logo DIT", styles["Normal"])
@@ -328,15 +400,6 @@ def build_cover(elements: list, styles) -> None:
     elements.append(Spacer(1, 0.8 * cm))
     elements.append(Paragraph("Presente par :", styles["CoverMeta"]))
     elements.append(Paragraph("<b>Mouhamadou Moustapha Souane</b>", styles["CoverMeta"]))
-    elements.append(Spacer(1, 1.0 * cm))
-    elements.append(
-        Paragraph(
-            "Ce rapport est redige a partir de captures reelles de tests DVWA. "
-            "Pour chaque instruction, une capture est associee (selection aleatoire quand plusieurs captures equivalentes existent) "
-            "et suivie d'une interpretation technique du resultat observe.",
-            styles["BodySmall"],
-        )
-    )
     elements.append(PageBreak())
 
 
@@ -353,6 +416,7 @@ def build_pdf() -> None:
     styles.add(ParagraphStyle(name="BodySmall", parent=styles["Normal"], fontSize=10, leading=14))
     styles.add(ParagraphStyle(name="StepHead", parent=styles["Heading4"], fontSize=11, leading=15, textColor=colors.HexColor("#0b3d91")))
     styles.add(ParagraphStyle(name="Explain", parent=styles["Normal"], fontSize=10, leading=14))
+    styles.add(ParagraphStyle(name="PhotoExplain", parent=styles["Normal"], fontSize=9.5, leading=13, textColor=colors.HexColor("#1e1e1e")))
 
     doc = SimpleDocTemplate(
         str(OUTPUT_PDF),
@@ -380,15 +444,15 @@ def build_pdf() -> None:
             elements.append(Paragraph(f"Instruction {step_id}", styles["StepHead"]))
             elements.append(Paragraph(instruction, styles["Normal"]))
             elements.append(Spacer(1, 0.1 * cm))
-            elements.append(
-                Paragraph(
-                    f"<i>Capture retenue (choix aleatoire parmi les captures compatibles) : {img_name}</i>",
-                    styles["BodySmall"],
-                )
-            )
-            elements.append(Spacer(1, 0.1 * cm))
             elements.append(RLImage(str(img_path), width=16.0 * cm, height=9.2 * cm))
             elements.append(Spacer(1, 0.12 * cm))
+            elements.append(
+                Paragraph(
+                    f"<b>Description detaillee de la capture :</b> {image_detail(img_name, step_id, instruction)}",
+                    styles["PhotoExplain"],
+                )
+            )
+            elements.append(Spacer(1, 0.08 * cm))
             elements.append(Paragraph(f"<b>Resultat et interpretation :</b> {result_text(step_id, instruction)}", styles["Explain"]))
             elements.append(Spacer(1, 0.35 * cm))
             used_count += 1

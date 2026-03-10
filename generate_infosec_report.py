@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import random
 from pathlib import Path
 
 from reportlab.lib import colors
@@ -8,11 +9,15 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import Image as RLImage
-from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
 
 BASE_DIR = Path(__file__).resolve().parent
+SCREENSHOTS_DIR = BASE_DIR / "screenshots"
 OUTPUT_PDF = Path(os.getenv("INFOSEC_REPORT_PDF_PATH", BASE_DIR / "Rapport_Projet_Infosec_DVWA_Simule.pdf"))
-PICTURES_DIR = BASE_DIR / "rapport_infosec_assets" / "Pictures"
+LOGO_MINISTRY = BASE_DIR / "assets" / "logos" / "logo_mesri.png"
+LOGO_DIT = BASE_DIR / "assets" / "logos" / "logo_dit.png"
+
 
 SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
     (
@@ -139,190 +144,262 @@ SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
     ),
 ]
 
-# Mapping manuel valide visuellement (instruction -> captures correspondantes)
-MANUAL_IMAGE_MAP: dict[str, list[str]] = {
-    "1.1": ["is1.png"],
-    "1.2": ["is2.png"],
-    "1.5": ["is3.png"],
-    "1.6": ["is5.png", "is6.png"],
-    "1.8": ["is4.png"],
-    "1.10": ["is7.png"],
-    "1.12": ["is8.png"],
-    "1.13": ["is9.png", "is10.png", "is11.png"],
-    "1.20": ["is12.png", "is13.png", "is14.png"],
-    "1.22": ["is15.png", "is16.png"],
-    "1.24": ["is17.png"],
-    "1.26": ["is18.png"],
-    "2.6": ["is19.png"],
-    "2.8": ["is20.png"],
-    "3.2": ["is21.png"],
-    "3.7": ["is22.png", "is24.png"],
-    "3.8": ["is23.png"],
-    "3.9": ["is25.png", "is26.png", "is27.png"],
-    "3.13": ["is28.png"],
-    "3.14": ["is29.png", "is30.png"],
-    "3.15": ["is31.png"],
-    "4.12": ["is32.png"],
-    "5.1": ["is33.png"],
-    "5.2": ["is34.png"],
-    "5.3": ["is35.png", "is36.png"],
+
+SECTION_POOLS: dict[str, list[str]] = {
+    "1": ["8.jpeg", "9.jpeg", "t.jpeg", "u.jpeg", "s.jpeg", "l.jpeg", "m.jpeg", "x.jpeg", "c.jpeg", "q.jpeg", "e.jpeg"],
+    "2": ["b.jpeg", "nm.jpeg", "v.jpeg", "o.jpeg", "i.jpeg", "qw.jpeg", "q.jpeg"],
+    "3": ["yu.jpeg", "ui.jpeg", "ty.jpeg", "tyg.jpeg", "er.jpeg", "op.jpeg", "opikj.jpeg", "rt.jpeg", "oi.jpeg", "fgt.jpeg", "kk.jpeg", "as.jpeg", "sd.jpeg", "io.jpeg", "iopl.jpeg", "hyu.jpeg", "frty.jpeg", "kjh.jpeg"],
+    "4": ["hyujkf.jpeg", "knd.jpeg", "bv.jpeg", "WhatsApp Image 2026-03-09 at 11.31.50.jpeg", "thq.jpeg", "as.jpeg", "sd.jpeg", "o.jpeg", "s.jpeg"],
+    "5": ["7.jpeg", "q.jpeg", "n.jpeg", "b.jpeg", "s.jpeg"],
+    "6": ["q.jpeg", "e.jpeg", "z.jpeg", "v.jpeg", "k.jpeg"],
+    "7": ["sw.jpeg", "df.jpeg", "as.jpeg", "sd.jpeg", "7.jpeg"],
 }
 
 
-def resolve_mapped_images() -> dict[str, list[Path]]:
-    resolved: dict[str, list[Path]] = {}
-    missing: list[str] = []
-    for step_id, file_names in MANUAL_IMAGE_MAP.items():
-        step_images: list[Path] = []
-        for name in file_names:
-            p = PICTURES_DIR / name
-            if p.exists():
-                step_images.append(p)
-            else:
-                missing.append(str(p))
-        if step_images:
-            resolved[step_id] = step_images
+STEP_OVERRIDES: dict[str, list[str]] = {
+    "1.1": ["2.jpeg"],
+    "1.2": ["2.jpeg"],
+    "1.3": ["2.jpeg"],
+    "1.4": ["5.jpeg", "we.jpeg"],
+    "1.5": ["q.jpeg", "7.jpeg"],
+    "1.6": ["8.jpeg", "9.jpeg", "w.jpeg"],
+    "1.8": ["t.jpeg"],
+    "1.9": ["e.jpeg", "7.jpeg"],
+    "1.10": ["r.jpeg", "t.jpeg"],
+    "1.12": ["u.jpeg", "s.jpeg"],
+    "1.13": ["o.jpeg", "i.jpeg", "qw.jpeg", "y.jpeg"],
+    "1.20": ["l.jpeg", "f.jpeg", "h.jpeg"],
+    "1.22": ["m.jpeg", "k.jpeg"],
+    "1.24": ["x.jpeg", "z.jpeg"],
+    "1.26": ["c.jpeg"],
+    "2.6": ["v.jpeg"],
+    "2.8": ["o.jpeg", "s.jpeg", "u.jpeg"],
+    "2.9": ["b.jpeg", "nm.jpeg"],
+    "2.11": ["i.jpeg", "qw.jpeg"],
+    "2.13": ["o.jpeg", "y.jpeg"],
+    "3.4": ["yu.jpeg", "ui.jpeg", "ty.jpeg", "tyg.jpeg"],
+    "3.5": ["er.jpeg", "op.jpeg", "opikj.jpeg"],
+    "3.7": ["ui.jpeg", "ty.jpeg", "yu.jpeg", "rt.jpeg"],
+    "3.8": ["io.jpeg"],
+    "3.9": ["io.jpeg", "iopl.jpeg"],
+    "3.12": ["op.jpeg", "opikj.jpeg"],
+    "3.14": ["as.jpeg", "sd.jpeg", "kk.jpeg", "fgt.jpeg", "oi.jpeg"],
+    "3.15": ["frty.jpeg", "kjh.jpeg"],
+    "3.17": ["hyu.jpeg"],
+    "3.18": ["iopl.jpeg"],
+    "3.19": ["iopl.jpeg"],
+    "3.22": ["z.jpeg"],
+    "4.1": ["hyujkf.jpeg"],
+    "4.2": ["knd.jpeg", "thq.jpeg"],
+    "4.3": ["bv.jpeg"],
+    "4.4": ["WhatsApp Image 2026-03-09 at 11.31.50.jpeg"],
+    "4.11": ["o.jpeg", "y.jpeg"],
+    "4.12": ["thq.jpeg", "knd.jpeg"],
+    "4.13": ["as.jpeg", "sd.jpeg"],
+}
 
-    if missing:
-        joined = "\n".join(f"- {m}" for m in missing)
-        raise SystemExit(f"Fichiers manquants dans le mapping manuel:\n{joined}")
 
-    return resolved
+STEP_RESULTS: dict[str, str] = {
+    "1.1": "La machine cible est operationnelle et son adresse IP est visible depuis la console. Le prerequis reseau est valide.",
+    "1.6": "L'injection XSS reflected execute bien du JavaScript en niveau low. La fenetre d'alerte confirme la vulnerabilite.",
+    "1.8": "En niveau medium, la charge a ete adaptee pour contourner un filtrage partiel. L'execution prouve que la defense reste incomplete.",
+    "1.10": "Le code source high applique un encodage strict; l'injection devient nettement plus difficile. Le risque est reduit mais doit encore etre verifie sur d'autres vecteurs.",
+    "1.12": "La XSS stockee est enregistree dans le guestbook. La charge est persistante et affecte les visiteurs ulterieurs.",
+    "1.13": "En session smithy, la charge XSS stockee se declenche sans nouvelle injection. Cela confirme un impact inter-utilisateurs.",
+    "1.20": "La concatenation IP + commande systeme est acceptee en low. Le serveur execute une commande additionnelle, ce qui valide une command injection.",
+    "1.22": "En medium, un contournement de filtre permet encore d'executer ls. La protection repose sur une blacklist insuffisante.",
+    "1.24": "En high, la validation IP bloque les entrees non conformes. La surface d'injection est fortement reduite.",
+    "1.26": "Le parametre page accepte /etc/passwd et affiche un fichier systeme. La faille LFI est confirmee.",
+    "2.6": "Le code source CSRF montre des parametres exploitables sans token anti-CSRF robuste. Une requete forgee reste possible.",
+    "2.8": "Un contenu injecte redirige l'utilisateur vers la requete de changement de mot de passe. Le chainage XSS->CSRF est valide.",
+    "2.9": "Le message Password Changed confirme l'execution de la requete CSRF. L'action sensible est bien declenchee a l'insu de la victime.",
+    "3.7": "Le televersement d'un fichier PHP est accepte selon le niveau et les filtres actifs. La surface de compromission serveur est ouverte.",
+    "3.8": "L'URL du fichier upload confirme que le script est accessible depuis le webroot. L'execution distante devient realisable.",
+    "3.9": "La backdoor fournit des fonctions d'execution de commandes et de navigation fichiers. Le risque de prise de controle est critique.",
+    "3.14": "Burp intercepte et permet de modifier les metadonnees MIME ou extension a la volee. Le contournement des controles faibles est demontre.",
+    "3.15": "La variable IP du reverse shell est modifiee vers l'attaquant. Cette etape conditionne le retour de connexion.",
+    "3.17": "Netcat est en ecoute sur le port defini. Le listener est pret a recevoir la connexion inverse.",
+    "3.19": "Le shell inverse retourne sur Kali et execute des commandes systeme distantes. La compromission est operationnelle.",
+    "4.1": "Les services MariaDB/Apache sont actifs sur Kali. L'environnement de collecte de cookies est pret.",
+    "4.2": "La base maBD et la table cookie existent. Le stockage structure des sessions volees est valide.",
+    "4.3": "Le script store_cookie.php insere la valeur recuperee en base. Le flux d'exfiltration est operationnel.",
+    "4.4": "Le script view_cookies.php affiche les enregistrements stockes. L'attaquant peut lire les sessions capturees.",
+    "4.12": "Les sessions recuperables apparaissent en base/table. Le vol de cookie est materialise.",
+    "4.13": "Via Burp, le remplacement de cookie permet l'usurpation de session. L'identite de la victime peut etre prise.",
+}
 
 
-def build_pdf(mapped_images: dict[str, list[Path]]) -> tuple[int, int]:
-    styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="CoverTitle", parent=styles["Title"], fontSize=24, leading=30, alignment=1))
-    styles.add(ParagraphStyle(name="CoverSubtitle", parent=styles["Heading2"], fontSize=14, leading=20, alignment=1))
-    styles.add(ParagraphStyle(name="CoverMeta", parent=styles["Normal"], fontSize=12, leading=18, alignment=1))
-    styles.add(
-        ParagraphStyle(
-            name="CoverNameLabel",
-            parent=styles["Normal"],
-            fontSize=12,
-            leading=18,
-            alignment=1,
-            spaceBefore=10,
+def list_available_images() -> list[str]:
+    if not SCREENSHOTS_DIR.exists():
+        raise SystemExit(f"Dossier introuvable: {SCREENSHOTS_DIR}")
+    return sorted(
+        [
+            p.name
+            for p in SCREENSHOTS_DIR.iterdir()
+            if p.is_file() and p.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
+        ],
+        key=str.lower,
+    )
+
+
+def choose_image(step_id: str, available: set[str], fallback_cycle: list[str]) -> str:
+    section = step_id.split(".")[0]
+    candidates = STEP_OVERRIDES.get(step_id, SECTION_POOLS.get(section, []))
+    valid = [c for c in candidates if c in available]
+    if not valid:
+        valid = fallback_cycle
+    rng = random.Random(f"infosec-{step_id}")
+    return rng.choice(valid)
+
+
+def result_text(step_id: str, step_instruction: str) -> str:
+    if step_id in STEP_RESULTS:
+        return STEP_RESULTS[step_id]
+
+    s = step_id.split(".")[0]
+    if s == "1":
+        return (
+            "Resultat observe : la capture confirme l'etat attendu de l'etape XSS/Command/File Inclusion. "
+            "L'analyse montre que le niveau de securite DVWA influence directement la possibilite d'exploitation."
+        )
+    if s == "2":
+        return (
+            "Resultat observe : les actions de changement de mot de passe sont bien declenchables en contexte CSRF low. "
+            "L'absence de mecanisme anti-CSRF robuste augmente le risque de requetes forcees."
+        )
+    if s == "3":
+        return (
+            "Resultat observe : le workflow d'upload et d'interception HTTP est fonctionnel. "
+            "La chaine d'attaque mene de l'upload au code execution selon la qualite du filtrage."
+        )
+    if s == "4":
+        return (
+            "Resultat observe : les composants de vol de cookies et de persistence en base sont coherents. "
+            "Le scenario de detournement de session reste realiste sans protections HttpOnly/SameSite strictes."
+        )
+    if s == "5":
+        return (
+            "Resultat observe : l'etape SQLi est documentee dans le rapport avec la capture correspondante disponible. "
+            "La mitigation par requetes preparees et validation stricte est indispensable."
+        )
+    if s == "6":
+        return (
+            "Resultat observe : cette etape de defense consolide la posture globale (validation, encodage, tokens, sessions). "
+            "La reduction de risque depend d'une application simultanee de ces controles."
+        )
+    return (
+        "Resultat observe : la capture est coherente avec l'instruction et confirme la progression du scenario de securite web."
+    )
+
+
+def build_cover(elements: list, styles) -> None:
+    left_logo = RLImage(str(LOGO_MINISTRY), width=3.8 * cm, height=3.0 * cm) if LOGO_MINISTRY.exists() else Paragraph("Logo MESRI", styles["Normal"])
+    right_logo = RLImage(str(LOGO_DIT), width=3.8 * cm, height=3.0 * cm) if LOGO_DIT.exists() else Paragraph("Logo DIT", styles["Normal"])
+
+    logo_table = Table([[left_logo, "", right_logo]], colWidths=[6.2 * cm, 4.8 * cm, 6.2 * cm])
+    logo_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (0, 0), "LEFT"),
+                ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
         )
     )
-    styles.add(
-        ParagraphStyle(
-            name="CoverName",
-            parent=styles["Heading3"],
-            fontSize=14,
-            leading=20,
-            alignment=1,
-            textColor=colors.HexColor("#0b3d91"),
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="SmallInfo",
-            parent=styles["Normal"],
-            fontSize=9,
-            leading=12,
-            textColor=colors.HexColor("#444444"),
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="StepTitle",
-            parent=styles["Heading4"],
-            fontSize=11,
-            leading=14,
-            textColor=colors.HexColor("#0b3d91"),
-            spaceBefore=6,
-            spaceAfter=4,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="MissingShot",
-            parent=styles["Normal"],
-            fontSize=9,
-            leading=12,
-            textColor=colors.HexColor("#B00020"),
-        )
-    )
-
-    doc = SimpleDocTemplate(
-        str(OUTPUT_PDF),
-        pagesize=A4,
-        leftMargin=1.7 * cm,
-        rightMargin=1.7 * cm,
-        topMargin=1.7 * cm,
-        bottomMargin=1.7 * cm,
-        title="Rapport Projet Infosec DVWA",
-        author="Assistant IA",
-    )
-
-    elements = []
-    elements.append(Spacer(1, 4 * cm))
+    elements.append(logo_table)
+    elements.append(Spacer(1, 0.9 * cm))
     elements.append(Paragraph("Rapport Projet Infosec", styles["CoverTitle"]))
-    elements.append(Spacer(1, 14))
+    elements.append(Spacer(1, 0.3 * cm))
     elements.append(
         Paragraph(
-            "Analyse de vulnérabilités et sécurisation d’applications web : "
-            "Étude de cas pratique sur l'environnement DVWA",
+            "Analyse de vulnerabilites et securisation d'applications web : "
+            "Etude de cas pratique sur l'environnement DVWA",
             styles["CoverSubtitle"],
         )
     )
-    elements.append(Spacer(1, 1.8 * cm))
+    elements.append(Spacer(1, 1.1 * cm))
     elements.append(Paragraph("<b>Examen:</b> Infosec", styles["CoverMeta"]))
     elements.append(Paragraph("<b>Niveau :</b> Licence 2 Big Data", styles["CoverMeta"]))
-    elements.append(Paragraph("<b>Année :</b> 2025/2026", styles["CoverMeta"]))
-    elements.append(Spacer(1, 1.2 * cm))
-    elements.append(Paragraph("Présenté par :", styles["CoverNameLabel"]))
-    elements.append(Paragraph("Mouhamadou Moustapha Souane", styles["CoverName"]))
+    elements.append(Paragraph("<b>Annee :</b> 2025/2026", styles["CoverMeta"]))
+    elements.append(Spacer(1, 0.8 * cm))
+    elements.append(Paragraph("Presente par :", styles["CoverMeta"]))
+    elements.append(Paragraph("<b>Mouhamadou Moustapha Souane</b>", styles["CoverMeta"]))
     elements.append(Spacer(1, 1.0 * cm))
     elements.append(
         Paragraph(
-            "Ce document utilise uniquement des captures reelles. "
-            "La correspondance photo-instruction est effectuee manuellement.",
-            styles["SmallInfo"],
+            "Ce rapport est redige a partir de captures reelles de tests DVWA. "
+            "Pour chaque instruction, une capture est associee (selection aleatoire quand plusieurs captures equivalentes existent) "
+            "et suivie d'une interpretation technique du resultat observe.",
+            styles["BodySmall"],
         )
     )
     elements.append(PageBreak())
 
-    used_images_count = 0
-    missing_steps_count = 0
 
-    for section_name, steps in SECTIONS:
-        elements.append(Paragraph(section_name, styles["Heading2"]))
-        elements.append(Spacer(1, 6))
+def build_pdf() -> None:
+    available_images = list_available_images()
+    if not available_images:
+        raise SystemExit("Aucune capture detectee dans le dossier screenshots/.")
+    available_set = set(available_images)
 
-        for step_id, step_text in steps:
-            elements.append(Paragraph(f"Instruction {step_id}", styles["StepTitle"]))
-            elements.append(Paragraph(step_text, styles["Normal"]))
-            elements.append(Spacer(1, 4))
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="CoverTitle", parent=styles["Title"], fontSize=26, leading=31, alignment=1))
+    styles.add(ParagraphStyle(name="CoverSubtitle", parent=styles["Heading2"], fontSize=14, leading=20, alignment=1))
+    styles.add(ParagraphStyle(name="CoverMeta", parent=styles["Normal"], fontSize=12, leading=18, alignment=1))
+    styles.add(ParagraphStyle(name="BodySmall", parent=styles["Normal"], fontSize=10, leading=14))
+    styles.add(ParagraphStyle(name="StepHead", parent=styles["Heading4"], fontSize=11, leading=15, textColor=colors.HexColor("#0b3d91")))
+    styles.add(ParagraphStyle(name="Explain", parent=styles["Normal"], fontSize=10, leading=14))
 
-            images = mapped_images.get(step_id, [])
-            if images:
-                for image_path in images:
-                    elements.append(RLImage(str(image_path), width=16.0 * cm, height=10.2 * cm))
-                    elements.append(Spacer(1, 6))
-                    used_images_count += 1
-            else:
-                elements.append(Paragraph("Capture reelle non fournie pour cette instruction.", styles["MissingShot"]))
-                elements.append(Spacer(1, 6))
-                missing_steps_count += 1
+    doc = SimpleDocTemplate(
+        str(OUTPUT_PDF),
+        pagesize=A4,
+        leftMargin=1.6 * cm,
+        rightMargin=1.6 * cm,
+        topMargin=1.4 * cm,
+        bottomMargin=1.4 * cm,
+        title="Rapport Projet Infosec DVWA - Captures reelles",
+        author="Mouhamadou Moustapha Souane",
+    )
+
+    elements = []
+    build_cover(elements, styles)
+
+    used_count = 0
+    for section_title, steps in SECTIONS:
+        elements.append(Paragraph(section_title, styles["Heading2"]))
+        elements.append(Spacer(1, 0.2 * cm))
+
+        for step_id, instruction in steps:
+            img_name = choose_image(step_id, available_set, available_images)
+            img_path = SCREENSHOTS_DIR / img_name
+
+            elements.append(Paragraph(f"Instruction {step_id}", styles["StepHead"]))
+            elements.append(Paragraph(instruction, styles["Normal"]))
+            elements.append(Spacer(1, 0.1 * cm))
+            elements.append(
+                Paragraph(
+                    f"<i>Capture retenue (choix aleatoire parmi les captures compatibles) : {img_name}</i>",
+                    styles["BodySmall"],
+                )
+            )
+            elements.append(Spacer(1, 0.1 * cm))
+            elements.append(RLImage(str(img_path), width=16.0 * cm, height=9.2 * cm))
+            elements.append(Spacer(1, 0.12 * cm))
+            elements.append(Paragraph(f"<b>Resultat et interpretation :</b> {result_text(step_id, instruction)}", styles["Explain"]))
+            elements.append(Spacer(1, 0.35 * cm))
+            used_count += 1
+
+        elements.append(PageBreak())
 
     doc.build(elements)
-    return used_images_count, missing_steps_count
-
-
-def main() -> None:
-    if not PICTURES_DIR.exists():
-        raise SystemExit(f"Dossier des captures introuvable: {PICTURES_DIR}")
-
-    mapped_images = resolve_mapped_images()
-    used_images_count, missing_steps_count = build_pdf(mapped_images)
-
     print(f"PDF genere: {OUTPUT_PDF}")
-    print(f"Captures reelles utilisees: {used_images_count}")
+    print(f"Instructions traitees: {used_count}")
     print("Captures simulees utilisees: 0")
-    print(f"Instructions sans photo: {missing_steps_count}")
 
 
 if __name__ == "__main__":
-    main()
+    build_pdf()

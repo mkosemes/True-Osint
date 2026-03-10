@@ -403,6 +403,23 @@ def build_cover(elements: list, styles) -> None:
     elements.append(PageBreak())
 
 
+def build_project_description(elements: list, styles) -> None:
+    elements.append(Paragraph("Description du projet", styles["Heading2"]))
+    elements.append(Spacer(1, 0.35 * cm))
+    elements.append(
+        Paragraph(
+            "L’objectif de ce projet est de détecter et d’exploiter les vulnérabilités critiques au sein de l’application "
+            "Damn Vulnerable Web Application (DVWA) afin de maîtriser les techniques d’attaque et de comprendre les mécanismes "
+            "de défense associés. À travers l’utilisation d’outils de référence tels que Burp Suite et netcat, ainsi que le "
+            "déploiement de scripts PHP pour l’exécution de commandes via des accès dérobés, ce travail vise à renforcer les "
+            "compétences en tests de pénétration tout en intégrant des solutions concrètes de protection, notamment par la "
+            "sécurisation des flux via le protocole SSL/TLS.",
+            styles["ProjectDesc"],
+        )
+    )
+    elements.append(PageBreak())
+
+
 def build_pdf() -> None:
     available_images = list_available_images()
     if not available_images:
@@ -414,6 +431,7 @@ def build_pdf() -> None:
     styles.add(ParagraphStyle(name="CoverSubtitle", parent=styles["Heading2"], fontSize=14, leading=20, alignment=1))
     styles.add(ParagraphStyle(name="CoverMeta", parent=styles["Normal"], fontSize=12, leading=18, alignment=1))
     styles.add(ParagraphStyle(name="BodySmall", parent=styles["Normal"], fontSize=10, leading=14))
+    styles.add(ParagraphStyle(name="ProjectDesc", parent=styles["Normal"], fontSize=11, leading=17))
     styles.add(ParagraphStyle(name="StepHead", parent=styles["Heading4"], fontSize=11, leading=15, textColor=colors.HexColor("#0b3d91")))
     styles.add(ParagraphStyle(name="Explain", parent=styles["Normal"], fontSize=10, leading=14))
     styles.add(ParagraphStyle(name="PhotoExplain", parent=styles["Normal"], fontSize=9.5, leading=13, textColor=colors.HexColor("#1e1e1e")))
@@ -431,9 +449,10 @@ def build_pdf() -> None:
 
     elements = []
     build_cover(elements, styles)
+    build_project_description(elements, styles)
 
     used_count = 0
-    for section_title, steps in SECTIONS:
+    for idx, (section_title, steps) in enumerate(SECTIONS):
         elements.append(Paragraph(section_title, styles["Heading2"]))
         elements.append(Spacer(1, 0.2 * cm))
 
@@ -457,7 +476,8 @@ def build_pdf() -> None:
             elements.append(Spacer(1, 0.35 * cm))
             used_count += 1
 
-        elements.append(PageBreak())
+        if idx < len(SECTIONS) - 1:
+            elements.append(PageBreak())
 
     doc.build(elements)
     print(f"PDF genere: {OUTPUT_PDF}")
